@@ -4,6 +4,7 @@ from xdis import Code38, Code3, Code2, load_module
 import xdis
 
 from .objects import ObjectKind
+from .disassembler import Disassembler
 
 from types import CodeType
 from typing import NamedTuple, Tuple, List, Any
@@ -74,6 +75,11 @@ class PycView(BinaryView):
         self.session_data['opcodes'] = xdis.get_opcode(self.pycinfo.version, self.pycinfo.implementation)
         self.session_data['functions'] = self.funcs
         self.session_data['extended_args'] = {}
+
+        # Architecture callbacks run on analysis threads and do not carry a
+        # BinaryView parameter. Bind this view explicitly rather than trying
+        # to discover it through the UI from inside the disassembler.
+        Disassembler.bind_view(self)
 
         self.add_auto_segment(0, self.code_size, 0, self.code_size, SegmentFlag.SegmentContainsCode)
         self.add_auto_section("code", 0 , self.code_size, SectionSemantics.ReadOnlyCodeSectionSemantics)
