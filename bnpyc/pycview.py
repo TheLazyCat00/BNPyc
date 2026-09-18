@@ -15,7 +15,7 @@ class PycInfo(NamedTuple):
     timestamp: int = None
     magic_int: int = None
     co: object = None
-    is_pypy: bool = None
+    implementation: object = None
     source_size: int = None
     sip_hash: None = None
 
@@ -31,7 +31,13 @@ class PycView(BinaryView):
 
 
     def __init__(self, data):
-        self.pycinfo = PycInfo(*load_module(data.file.original_filename, {}))
+        # xdis <= 6.1 returned seven values from load_module(), while newer
+        # versions append file_offsets as an eighth value. The first seven
+        # fields are otherwise compatible. The implementation field is a
+        # boolean on older xdis versions and a PythonImplementation enum on
+        # newer versions; get_opcode() expects the matching representation.
+        module_info = load_module(data.file.original_filename, {})
+        self.pycinfo = PycInfo(*module_info[:7])
 
         original_filename = data.file.original_filename
 
@@ -65,7 +71,7 @@ class PycView(BinaryView):
     def init(self) -> bool:
         self.session_data['pycinfos'] = [self.pycinfo, ]
         self.session_data['pycinfos'].extend(self.tmp)
-        self.session_data['opcodes'] = xdis.get_opcode(self.pycinfo.version, self.pycinfo.is_pypy)
+        self.session_data['opcodes'] = xdis.get_opcode(self.pycinfo.version, self.pycinfo.implementation)
         self.session_data['functions'] = self.funcs
         self.session_data['extended_args'] = {}
 
