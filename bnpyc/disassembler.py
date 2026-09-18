@@ -1,51 +1,41 @@
 from binaryninja import BinaryView, InstructionInfo, BranchType, InstructionTextToken, InstructionTextTokenType
-from binaryninjaui import UIContext
-
 from typing import Tuple, List
-
-from .pycview import PycInfo
 
 """
 The Disassembler for python bytecode version [3.6; 3.10+]
 """
 class Disassembler:
+    _bound_bv: BinaryView = None
+
     def __init__(self):
         self.bv: BinaryView = None
         self.loaded_function_names: List[str] = []
         self.jump_instruction_length = 2
 
+    @classmethod
+    def bind_view(cls, bv: BinaryView) -> None:
+        cls._bound_bv = bv
 
-    def set_bv(self) -> bool:
-        ac = UIContext.activeContext()
-        if ac is None:
-            ac = UIContext.allContexts()[0]
-
-        cv = ac.getCurrentViewFrame()
-        if cv is None:
-            return False
-
-        try:
-            self.bv = cv.getCurrentBinaryView()
-        except TypeError:
-            return False
-
+    def setup(self) -> bool:
+        self.bv = self._bound_bv
         if self.bv is None:
             return False
 
-        return self.bv.session_data.get('pycinfos') != None # is it the right bv ?
+        pycinfos = self.bv.session_data.get('pycinfos')
+        opcodes = self.bv.session_data.get('opcodes')
+        extended_args = self.bv.session_data.get('extended_args')
+        if pycinfos is None or opcodes is None or extended_args is None:
+            return False
 
-
-    def setup(self):
-        while not self.set_bv():
-            pass
-        
-        self.pycinfos: List[PycInfo] = self.bv.session_data['pycinfos']
-        self.opcodes = self.bv.session_data['opcodes']
-        self.extended_args = self.bv.session_data['extended_args']
+        self.pycinfos = pycinfos
+        self.opcodes = opcodes
+        self.extended_args = extended_args
+        return True
 
 
     def disasm(self, data: bytes, addr: int) -> InstructionInfo:
-        self.setup()
+        if not self.setup():
+            return None
 
         i_info = InstructionInfo()
         i_info.length = 2
@@ -384,12 +374,16 @@ class Disassembler:
 
 
     def get_nop(self) -> bytes:
-        self.setup()
+        if not self.setup():
+            return None
 
         return bytes([self.opcodes.NOP, 0])
 
 
     def invert_branch(self, data: bytes, addr: int) -> bytes:
+        if not self.setup():
+            return None
+
         opname = self.opcodes.opname[data[0]]
 
         if opname in ('JUMP_ABSOLUTE', 'JUMP_FORWARD'):
@@ -418,7 +412,8 @@ class Disassembler35(Disassembler):
         self.jump_instruction_length = 3
 
     def disasm(self, data: bytes, addr: int) -> InstructionInfo:
-        self.setup()
+        if not self.setup():
+            return None
 
         i_info = InstructionInfo()
         i_info.length = 1
